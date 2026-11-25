@@ -341,7 +341,7 @@ em.serif, .serif { font-family: var(--serif); font-style: italic; font-weight: 5
 .mini-head b { color: var(--gold-2); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sol .viz-mini { height: 170px; position: relative; }
 .sol .viz-mini canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.mini-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+.mini-legend { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
 .mini-fig--dark .mini-legend { color: rgba(232,236,243,0.62); }
 .mini-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .mini-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
@@ -651,7 +651,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 6px 
 .track-token { will-change: transform; }
 
 /* ---------- photography ---------- */
-.photo { position: relative; overflow: hidden; margin: 36px 0 0; border-radius: var(--r-xl); background: var(--sand); box-shadow: var(--shadow-lift); }
+.photo { position: relative; overflow: hidden; margin: 0; border-radius: var(--r-xl); background: var(--sand); box-shadow: var(--shadow-lift); }
 .photo img { position: absolute; left: 0; top: -8%; width: 100%; height: 116%; object-fit: cover; will-change: transform; }
 .photo::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); background: linear-gradient(180deg, transparent 60%, rgba(11,31,58,0.18)); pointer-events: none; }
 .panel-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.16; mix-blend-mode: luminosity; pointer-events: none;
@@ -662,3 +662,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 6px 
 .cta .cta-canvas { z-index: 1; }
 .panel-navy > .wrap { position: relative; z-index: 1; }
 .cta .panel-photo { z-index: 0; }
+
+.photo--wide { width: 100%; max-width: 1160px; margin: clamp(40px, 6vw, 72px) auto 0; aspect-ratio: 21 / 9; }
+.photo--wide img { object-position: center 45%; }
+@media (max-width: 640px) { .photo--wide { aspect-ratio: 4 / 3; border-radius: var(--r-lg); } }
