@@ -75,117 +75,112 @@
     }
   }
 
-  /* ---------- solutions: whole-life style mini chart (light card) ---------- */
-  var covMini = $('#mini-coverage');
-  if (covMini) {
-    var cm = fitCanvas(covMini), ctx = cm.ctx, t0 = null;
-    var drawCov = function (p) {
-      var w = cm.w, h = cm.h, pad = 10;
-      ctx.clearRect(0, 0, w, h);
-      // grid
-      ctx.strokeStyle = 'rgba(11,31,58,0.06)'; ctx.lineWidth = 1;
-      for (var g = 1; g < 4; g++) { ctx.beginPath(); ctx.moveTo(pad, h * g / 4); ctx.lineTo(w - pad, h * g / 4); ctx.stroke(); }
-      var X = function (u) { return pad + u * (w - pad * 2); };
-      var dbY = h * 0.22;
-      // death benefit line (lifelong)
-      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, X(p), h); ctx.clip();
-      ctx.strokeStyle = NAVY; ctx.lineWidth = 2.5; ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(X(0), dbY); ctx.lineTo(X(1), dbY); ctx.stroke();
-      // cash value curve with area
-      var grad = ctx.createLinearGradient(0, h * 0.3, 0, h);
-      grad.addColorStop(0, 'rgba(201,167,74,0.35)'); grad.addColorStop(1, 'rgba(201,167,74,0)');
-      ctx.beginPath(); ctx.moveTo(X(0), h - pad);
-      for (var i = 0; i <= 60; i++) { var u = i / 60; ctx.lineTo(X(u), h - pad - (h - pad - dbY - 8) * Math.pow(u, 1.7)); }
-      ctx.lineTo(X(1), h - pad); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
-      ctx.beginPath();
-      for (var j = 0; j <= 60; j++) { var v = j / 60; var y = h - pad - (h - pad - dbY - 8) * Math.pow(v, 1.7); if (!j) ctx.moveTo(X(v), y); else ctx.lineTo(X(v), y); }
-      ctx.strokeStyle = GOLD; ctx.lineWidth = 2.5; ctx.stroke();
-      ctx.restore();
-      // labels
-      ctx.font = '600 12px Onest, sans-serif'; ctx.fillStyle = NAVY; ctx.fillText('Death benefit', X(0), dbY - 10);
-      if (p > 0.7) { var cu = 0.66, cy = h - pad - (h - pad - dbY - 8) * Math.pow(cu, 1.7); ctx.fillStyle = '#8a6a1c'; ctx.globalAlpha = Math.min(1, (p - 0.7) * 4); ctx.fillText('Cash value', X(cu) + 6, cy + 24); ctx.globalAlpha = 1; }
-      // head dot
-      var hu = Math.min(p, 1), hy = h - pad - (h - pad - dbY - 8) * Math.pow(hu, 1.7);
-      ctx.beginPath(); ctx.arc(X(hu), hy, 5, 0, 6.283); ctx.fillStyle = GOLD; ctx.fill();
-      ctx.beginPath(); ctx.arc(X(hu), hy, 10 + 3 * Math.sin(Date.now() / 300), 0, 6.283); ctx.strokeStyle = 'rgba(201,167,74,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
-    };
-    if (reduce) drawCov(1);
-    else {
-      var prog = 0;
-      once(covMini, function () {
-        loop(covMini, function (dt) { prog = Math.min(1, prog + dt / 2.4); drawCov(1 - Math.pow(1 - prog, 3)); });
-      });
-      drawCov(0);
-    }
-    window.addEventListener('resize', function () { cm = fitCanvas(covMini); ctx = cm.ctx; drawCov(1); });
+  /* canvas that always matches its box (no stretching when layout shifts) */
+  function liveCanvas(c, draw) {
+    var box = { ctx: null, w: 0, h: 0 };
+    var ready = false;
+    var fit = function () { var f = fitCanvas(c); box.ctx = f.ctx; box.w = f.w; box.h = f.h; if (ready) draw(); };
+    fit(); ready = true; setTimeout(draw, 0);
+    if ('ResizeObserver' in window) {
+      var lw = box.w, lh = box.h;
+      new ResizeObserver(function () { var r = c.getBoundingClientRect(); if (Math.abs(r.width - lw) > 0.5 || Math.abs(r.height - lh) > 0.5) { lw = r.width; lh = r.height; fit(); } }).observe(c);
+    } else window.addEventListener('resize', fit);
+    return box;
   }
 
-  /* ---------- solutions: policy portfolio maturities (dark card) ---------- */
+  /* ---------- solutions: permanent coverage mini chart (no text on canvas; legend is HTML) ---------- */
+  var covMini = $('#mini-coverage');
+  if (covMini) {
+    var cvP = reduce ? 1 : 0, cvT = 0;
+    var cvb = liveCanvas(covMini, function () { drawCov(); });
+    function drawCov() {
+      var ctx = cvb.ctx, w = cvb.w, h = cvb.h; if (!ctx) return;
+      var p = 1 - Math.pow(1 - cvP, 3), L = 6, R = w - 14, T = 14, B = h - 10;
+      var X = function (u) { return L + u * (R - L); };
+      var dbY = T + 6, cvTop = T + (B - T) * 0.34; // cash value tops out well below the benefit line
+      var CY = function (u) { return B - (B - cvTop) * Math.pow(u, 1.65); };
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(11,31,58,0.06)'; ctx.lineWidth = 1;
+      for (var g = 1; g <= 3; g++) { var gy = T + (B - T) * g / 4 + 8; ctx.beginPath(); ctx.moveTo(L, gy); ctx.lineTo(R, gy); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(L, B + 0.5); ctx.lineTo(R, B + 0.5); ctx.strokeStyle = 'rgba(11,31,58,0.14)'; ctx.stroke();
+      if (p <= 0) return;
+      // death benefit band: lifelong, flat
+      ctx.beginPath(); ctx.moveTo(X(0), dbY); ctx.lineTo(X(p), dbY);
+      ctx.strokeStyle = NAVY; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.stroke();
+      // cash value area + line
+      var grad = ctx.createLinearGradient(0, cvTop, 0, B);
+      grad.addColorStop(0, 'rgba(201,167,74,0.32)'); grad.addColorStop(1, 'rgba(201,167,74,0.02)');
+      ctx.beginPath(); ctx.moveTo(X(0), B);
+      var n = 64;
+      for (var i = 0; i <= n; i++) { var u = p * i / n; ctx.lineTo(X(u), CY(u)); }
+      ctx.lineTo(X(p), B); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+      ctx.beginPath();
+      for (i = 0; i <= n; i++) { u = p * i / n; if (!i) ctx.moveTo(X(u), CY(u)); else ctx.lineTo(X(u), CY(u)); }
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 2.5; ctx.stroke();
+      // heads
+      var pulse = 0.5 + 0.5 * Math.sin(cvT * 3);
+      [[X(p), dbY, NAVY, 'rgba(11,31,58,'], [X(p), CY(p), GOLD, 'rgba(201,167,74,']].forEach(function (hd) {
+        ctx.beginPath(); ctx.arc(hd[0], hd[1], 7 + pulse * 3, 0, 6.283); ctx.fillStyle = hd[3] + (0.16 - pulse * 0.08) + ')'; ctx.fill();
+        ctx.beginPath(); ctx.arc(hd[0], hd[1], 4.5, 0, 6.283); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.lineWidth = 2.2; ctx.strokeStyle = hd[2]; ctx.stroke();
+      });
+    }
+    if (!reduce) once(covMini, function () { var t0 = performance.now(); loop(covMini, function (dt) { cvT += dt; cvP = Math.min(1, (performance.now() - t0) / 2200); drawCov(); }); }, 0.3);
+    else drawCov();
+  }
+
+  /* ---------- solutions: policy portfolio maturing (no text on canvas; counter + legend are HTML) ---------- */
   var port = $('#mini-portfolio');
   if (port) {
-    var pm = fitCanvas(port), pctx = pm.ctx, R = rng(7), N = 28, pol = [];
-    // each policy: lane position + maturity time on a 0..1 horizon (bell-ish, centered)
-    for (var k = 0; k < N; k++) {
-      var m = 0.15 + 0.7 * ((R() + R() + R()) / 3);
-      pol.push({ m: m, lane: k % 7, x: R(), size: 0.6 + R() * 0.5 });
-    }
-    pol.sort(function (a, b) { return a.m - b.m; });
-    var clock = 0;
-    var drawPort = function () {
-      var w = pm.w, h = pm.h, top = 26, laneH = (h * 0.56 - top) / 7, base = h - 6;
-      pctx.clearRect(0, 0, w, h);
-      var cyc = (clock % 9) / 7.5; // 0..1.2 then restart
-      var tcur = Math.min(1, cyc);
-      pctx.globalAlpha = cyc > 1.08 ? Math.max(0, 1 - (cyc - 1.08) / 0.1) : Math.min(1, cyc / 0.04);
-      // policies as tokens
+    var R = rng(7), N = 28, pol = [], countEl = $('#pm-count');
+    for (var k = 0; k < N; k++) pol.push({ m: 0.12 + 0.76 * ((R() + R() + R()) / 3) });
+    var order = pol.map(function (p, i) { return i; }).sort(function (a, b) { return pol[a].m - pol[b].m; });
+    pol.forEach(function (p) { p.glow = 0; });
+    var clock = reduce ? 7.6 : 0, lastShown = -1;
+    var pmb = liveCanvas(port, function () { drawPort(0); });
+    function drawPort(dt) {
+      var c = pmb.ctx, w = pmb.w, h = pmb.h; if (!c) return;
+      var cyc = (clock % 10) / 7.6, tcur = Math.min(1, cyc);
+      var fadeA = cyc > 1.12 ? Math.max(0, 1 - (cyc - 1.12) / 0.1) : 1;
+      c.clearRect(0, 0, w, h);
+      // --- top band: 28 policies as a 14x2 grid of tiles
+      var cols = w < 360 ? 7 : 14, rows = N / cols, gap = 6, gridH = Math.min(h * 0.46, rows * 26 + (rows - 1) * gap);
+      var tw = (w - gap * (cols - 1)) / cols, th = (gridH - gap * (rows - 1)) / rows;
       var matured = 0;
-      pol.forEach(function (p) {
-        var x = 10 + p.m * (w - 20), y = top + p.lane * laneH + laneH / 2;
-        var done = tcur >= p.m;
-        if (done) matured++;
-        pctx.beginPath();
-        var r = 4.2 * p.size + (done ? 1.2 : 0);
-        pctx.arc(x, y, r, 0, 6.283);
-        pctx.fillStyle = done ? GOLD2 : 'rgba(255,255,255,0.22)';
-        pctx.fill();
-        if (done && tcur - p.m < 0.06) {
-          var a = 1 - (tcur - p.m) / 0.06;
-          pctx.beginPath(); pctx.arc(x, y, r + 10 * (1 - a), 0, 6.283);
-          pctx.strokeStyle = 'rgba(226,182,83,' + a + ')'; pctx.lineWidth = 1.5; pctx.stroke();
+      pol.forEach(function (p, i) {
+        var col = i % cols, row = Math.floor(i / cols), x = col * (tw + gap), y = row * (th + gap);
+        var done = tcur >= p.m; if (done) matured++;
+        p.glow += ((done ? 1 : 0) - p.glow) * Math.min(1, (dt || 1) * 6);
+        var a = p.glow * fadeA;
+        c.beginPath(); c.roundRect ? c.roundRect(x, y, tw, th, 5) : c.rect(x, y, tw, th);
+        c.fillStyle = 'rgba(255,255,255,0.07)'; c.fill();
+        c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1; c.stroke();
+        if (a > 0.01) {
+          c.save(); c.globalAlpha = a;
+          var gg = c.createLinearGradient(x, y, x + tw, y + th); gg.addColorStop(0, '#f1d08a'); gg.addColorStop(1, '#c9a74a');
+          c.beginPath(); c.roundRect ? c.roundRect(x, y, tw, th, 5) : c.rect(x, y, tw, th); c.fillStyle = gg; c.fill();
+          c.restore();
         }
       });
-      // time cursor
-      var cx = 10 + tcur * (w - 20);
-      pctx.strokeStyle = 'rgba(255,255,255,0.25)'; pctx.setLineDash([3, 4]); pctx.lineWidth = 1;
-      pctx.beginPath(); pctx.moveTo(cx, top); pctx.lineTo(cx, base); pctx.stroke(); pctx.setLineDash([]);
-      // cumulative proceeds step line
-      var floorY = base, ceilY = h * 0.64;
-      pctx.beginPath(); pctx.moveTo(10, floorY);
-      var c = 0;
-      pol.forEach(function (p) {
-        if (p.m > tcur) return;
-        var x = 10 + p.m * (w - 20);
-        pctx.lineTo(x, floorY - (floorY - ceilY) * (c / N));
-        c++;
-        pctx.lineTo(x, floorY - (floorY - ceilY) * (c / N));
-      });
-      pctx.lineTo(cx, floorY - (floorY - ceilY) * (c / N));
-      pctx.strokeStyle = GOLD2; pctx.lineWidth = 2.2; pctx.stroke();
-      // expected schedule (dashed smooth)
-      pctx.beginPath();
-      for (var i = 0; i <= 50; i++) {
-        var u = i / 50, z = (u - 0.5) / 0.16, cdf = 0.5 * (1 + erf(z / Math.SQRT2));
-        var yy = floorY - (floorY - ceilY) * cdf;
-        if (!i) pctx.moveTo(10 + u * (w - 20), yy); else pctx.lineTo(10 + u * (w - 20), yy);
-      }
-      pctx.strokeStyle = 'rgba(255,255,255,0.28)'; pctx.setLineDash([4, 5]); pctx.lineWidth = 1.2; pctx.stroke(); pctx.setLineDash([]);
-      pctx.globalAlpha = 1;
-      pctx.font = '600 11.5px Onest, sans-serif'; pctx.fillStyle = 'rgba(232,236,243,0.65)';
-      pctx.fillText('Policies matured: ' + matured + ' / ' + N, 10, 13);
-    };
-    if (reduce) { clock = 7.5; drawPort(); }
-    else loop(port, function (dt) { clock += dt; drawPort(); });
-    window.addEventListener('resize', function () { pm = fitCanvas(port); pctx = pm.ctx; drawPort(); });
+      // --- bottom band: cumulative proceeds vs expected schedule, separated by a clear gap
+      var top = gridH + 22, base = h - 4, X = function (u) { return 2 + u * (w - 4); };
+      var Yc = function (f) { return base - (base - top) * f; };
+      c.strokeStyle = 'rgba(255,255,255,0.08)'; c.beginPath(); c.moveTo(0, base + 0.5); c.lineTo(w, base + 0.5); c.stroke();
+      c.beginPath();
+      for (var i = 0; i <= 60; i++) { var u = i / 60, z = (u - 0.5) / 0.17, cdf = 0.5 * (1 + erf(z / Math.SQRT2)); if (!i) c.moveTo(X(u), Yc(cdf)); else c.lineTo(X(u), Yc(cdf)); }
+      c.strokeStyle = 'rgba(255,255,255,0.3)'; c.setLineDash([4, 5]); c.lineWidth = 1.2; c.stroke(); c.setLineDash([]);
+      c.save(); c.globalAlpha = fadeA;
+      var sorted = order.map(function (j) { return pol[j].m; }), cnt = 0;
+      c.beginPath(); c.moveTo(X(0), Yc(0));
+      sorted.forEach(function (m) { if (m > tcur) return; c.lineTo(X(m), Yc(cnt / N)); cnt++; c.lineTo(X(m), Yc(cnt / N)); });
+      c.lineTo(X(tcur), Yc(cnt / N));
+      c.strokeStyle = GOLD2; c.lineWidth = 2.2; c.lineJoin = 'round'; c.stroke();
+      c.beginPath(); c.arc(X(tcur), Yc(cnt / N), 4, 0, 6.283); c.fillStyle = GOLD2; c.fill();
+      c.restore();
+      if (countEl && matured !== lastShown) { countEl.textContent = matured; lastShown = matured; }
+    }
+    if (reduce) drawPort(0);
+    else loop(port, function (dt) { clock += dt; drawPort(dt); });
   }
   function erf(x) { var s = x < 0 ? -1 : 1; x = Math.abs(x); var t = 1 / (1 + 0.3275911 * x); var y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return s * y; }
 
@@ -233,7 +228,7 @@
       var lanes = [{ y: 0, label: 'Equity & bond markets', sub: 'sentiment and cycles', col: 'rgba(196,208,226,0.95)' },
                    { y: laneH + gap, label: 'Policy maturities', sub: 'actuarial outcomes', col: GOLD2 }];
       lanes.forEach(function (L) {
-        rr(sctx, 0, L.y, w, laneH, 14); sctx.fillStyle = 'rgba(255,255,255,0.035)'; sctx.fill();
+        rr(sctx, 0, L.y, w, laneH, 14); sctx.fillStyle = 'rgba(8,22,44,0.72)'; sctx.fill(); sctx.fillStyle = 'rgba(255,255,255,0.03)'; sctx.fill();
         sctx.strokeStyle = 'rgba(255,255,255,0.07)'; sctx.lineWidth = 1; sctx.stroke();
         sctx.beginPath(); sctx.arc(16, L.y + 18, 4, 0, 6.283); sctx.fillStyle = L.col; sctx.fill();
         sctx.font = '600 12.5px Onest, sans-serif'; sctx.fillStyle = '#fff'; sctx.fillText(L.label, 28, L.y + 22);
@@ -311,7 +306,7 @@
     function measure() {
       var cr = cv.getBoundingClientRect(), x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, rg = document.createRange();
       Array.prototype.forEach.call(host.children, function (ch) {
-        if (ch === cv) return;
+        if (ch === cv || ch.classList.contains('panel-photo')) return;
         var rects = [];
         if (ch.classList.contains('hero-actions')) rects = Array.prototype.map.call(ch.children, function (b) { return b.getBoundingClientRect(); });
         else { rg.selectNodeContents(ch); rects = [rg.getBoundingClientRect()]; }

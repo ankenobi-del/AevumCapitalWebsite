@@ -47,7 +47,11 @@ hero3d: yes
           <span class="tag">For individuals &amp; families</span>
           <h3>Life Insurance Solutions</h3>
           <p>Comprehensive protection strategies for individuals and families seeking to safeguard their financial legacy.</p>
-          <div class="viz-mini"><canvas id="mini-coverage" style="width:100%;height:100%" aria-label="Illustration: a lifelong death benefit with cash value growing beneath it" role="img"></canvas></div>
+          <figure class="mini-fig">
+            <figcaption class="mini-head"><span>Permanent coverage, illustrated</span><span class="mini-note">Not to scale</span></figcaption>
+            <div class="viz-mini"><canvas id="mini-coverage" aria-label="Illustration: a lifelong death benefit with cash value growing beneath it" role="img"></canvas></div>
+            <div class="mini-legend"><span><i style="background:#0b1f3a"></i>Death benefit, lifelong</span><span><i style="background:#c9a74a"></i>Cash value</span></div>
+          </figure>
           <ul class="ticks">
             <li>Permanent life insurance for lifelong coverage and cash value accumulation</li>
             <li>Term life insurance for targeted, cost-effective protection during critical periods</li>
@@ -60,7 +64,11 @@ hero3d: yes
           <span class="tag">For Accredited Investors &amp; Family Offices</span>
           <h3>Life Settlement Funds</h3>
           <p>Access a unique asset class that exploits a structural arbitrage in the secondary market for life insurance policies.</p>
-          <div class="viz-mini"><canvas id="mini-portfolio" style="width:100%;height:100%" aria-label="Illustration: a diversified portfolio of policies maturing along an actuarial schedule" role="img"></canvas></div>
+          <figure class="mini-fig mini-fig--dark">
+            <figcaption class="mini-head"><span>Illustrative portfolio · 28 policies</span><b><span id="pm-count">0</span> matured</b></figcaption>
+            <div class="viz-mini"><canvas id="mini-portfolio" aria-label="Illustration: a diversified portfolio of policies maturing along an actuarial schedule" role="img"></canvas></div>
+            <div class="mini-legend"><span><i style="background:#e2b653"></i>Proceeds collected</span><span><i class="dash"></i>Expected schedule</span></div>
+          </figure>
           <ul class="ticks">
             <li>Acquire existing life insurance policies at a discount to face value on the secondary market</li>
             <li>Returns are driven by actuarial outcomes — uncorrelated to equity and bond markets</li>
@@ -149,6 +157,7 @@ hero3d: yes
   <!-- UNCORRELATED -->
   <section class="section">
     <div class="panel-navy" style="padding:clamp(48px,7vw,96px) 0">
+      <img class="panel-photo" src="/assets/img/photos/atrium-1800.jpg" alt="" aria-hidden="true" loading="lazy" decoding="async">
       <div class="wrap signal-wrap">
         <div>
           <span class="eyebrow eyebrow--light" data-reveal>Uncorrelated by design</span>
@@ -204,6 +213,7 @@ hero3d: yes
   <!-- CTA -->
   <section class="section--tight">
     <div class="panel-navy cta">
+      <img class="panel-photo panel-photo--cta" src="/assets/img/photos/skyline-1800.jpg" srcset="/assets/img/photos/skyline-900.jpg 900w, /assets/img/photos/skyline-1800.jpg 1800w" sizes="100vw" alt="" aria-hidden="true" loading="lazy" decoding="async">
       <canvas class="cta-canvas" aria-hidden="true"></canvas>
       <span class="eyebrow eyebrow--light" data-reveal>Let's start the conversation</span>
       <h2 data-split>Ready to Explore <span class="serif" style="color:#e2b653">Your Options?</span></h2>

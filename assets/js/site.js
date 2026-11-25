@@ -177,6 +177,11 @@
   var heroReveals = document.querySelectorAll('.hero [data-reveal]');
   if (heroReveals.length) gsap.to(heroReveals, { opacity: 1, y: 0, duration: 1.2, ease: 'expo.out', stagger: 0.1, delay: 0.7 });
 
+  /* photography drifts slightly inside its frame */
+  document.querySelectorAll('.photo img').forEach(function (img) {
+    gsap.fromTo(img, { yPercent: -5 }, { yPercent: 5, ease: 'none', scrollTrigger: { trigger: img.parentNode, start: 'top bottom', end: 'bottom top', scrub: true } });
+  });
+
   /* subtle parallax on [data-parallax] */
   document.querySelectorAll('[data-parallax]').forEach(function (el) {
     var amt = parseFloat(el.getAttribute('data-parallax')) || 60;

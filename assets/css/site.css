@@ -98,7 +98,12 @@ em.serif, .serif { font-family: var(--serif); font-style: italic; font-weight: 5
 }
 .nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .brand { display: flex; align-items: center; flex-shrink: 0; }
-.brand img { height: 30px; width: auto; }
+.brand { gap: 12px; }
+.brand-crest { height: 48px; width: auto; transition: height 0.4s var(--ease); }
+.brand-rule { width: 1px; height: 26px; background: rgba(11,31,58,0.16); }
+.brand-word { height: 26px; width: auto; }
+.site-header.is-scrolled .brand-crest { height: 38px; }
+@media (max-width: 420px) { .brand-crest { height: 38px; } .brand-word { height: 20px; } .brand { gap: 9px; } }
 .nav-menu { display: flex; align-items: center; gap: 8px; }
 .nav-links { display: flex; align-items: center; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .nav-links a {
@@ -328,7 +333,20 @@ em.serif, .serif { font-family: var(--serif); font-style: italic; font-weight: 5
 .sol > p { color: var(--muted); font-size: 16.5px; max-width: 470px; }
 .sol--dark > p { color: rgba(232,236,243,0.72); }
 .sol .tag { font-size: 12.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-2); }
-.sol .viz-mini { margin: 28px -8px 24px; height: 190px; }
+.mini-fig { margin: 30px 0 28px; padding: 18px 18px 16px; border-radius: var(--r-md); background: linear-gradient(180deg, #fbfaf7, #f5f2ec); border: 1px solid rgba(11,31,58,0.06); }
+.mini-fig--dark { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.09); }
+.mini-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; font-size: 12.5px; font-weight: 600; color: var(--navy); }
+.mini-fig--dark .mini-head { color: rgba(232,236,243,0.85); }
+.mini-head .mini-note { font-weight: 500; color: var(--muted-2); font-size: 11.5px; }
+.mini-head b { color: var(--gold-2); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sol .viz-mini { height: 170px; position: relative; }
+.sol .viz-mini canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mini-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+.mini-fig--dark .mini-legend { color: rgba(232,236,243,0.62); }
+.mini-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.mini-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.mini-legend i.dash { background: repeating-linear-gradient(90deg, rgba(255,255,255,0.45) 0 4px, transparent 4px 7px); }
+@media (max-width: 640px) { .mini-fig { padding: 14px 12px 12px; } .sol .viz-mini { height: 150px; } }
 .ticks { list-style: none; padding: 0; margin: 0 0 28px; display: grid; gap: 12px; }
 .ticks li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; font-size: 15.5px; line-height: 1.5; color: var(--muted); }
 .sol--dark .ticks li { color: rgba(232,236,243,0.8); }
@@ -417,7 +435,7 @@ em.serif, .serif { font-family: var(--serif); font-style: italic; font-weight: 5
 .cta h2 { margin-top: 20px; }
 .cta-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
 @media (max-width: 1200px) { .cta { padding-top: clamp(170px, 22vw, 200px); } }
-.cta > *:not(.cta-canvas) { position: relative; z-index: 1; }
+.cta > *:not(.cta-canvas):not(.panel-photo) { position: relative; z-index: 2; }
 
 /* ---------- generic grids ---------- */
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
@@ -581,6 +599,8 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 6px 
 .foot-top { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 48px; }
 .foot-brand { display: flex; align-items: center; gap: 14px; color: #fff; font-family: var(--serif); font-size: 22px; letter-spacing: 0.16em; }
 .foot-brand svg { width: 34px; height: 34px; }
+.foot-crest { display: grid; place-items: center; width: 58px; height: 70px; border-radius: 16px; background: linear-gradient(160deg, #fbfaf7, #ece6da); box-shadow: 0 10px 24px -12px rgba(0,0,0,0.5); margin-right: 6px; }
+.foot-crest img { height: 54px; width: auto; }
 .foot-top p { margin-top: 20px; max-width: 380px; font-size: 15px; line-height: 1.65; }
 .foot-col h4 { color: #fff; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 18px; }
 .foot-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
@@ -629,3 +649,16 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 6px 
 /* ---------- motion performance ---------- */
 .hero-canvas canvas, .cta-canvas, .signal-canvas, .viz-mini canvas { transform: translateZ(0); }
 .track-token { will-change: transform; }
+
+/* ---------- photography ---------- */
+.photo { position: relative; overflow: hidden; margin: 36px 0 0; border-radius: var(--r-xl); background: var(--sand); box-shadow: var(--shadow-lift); }
+.photo img { position: absolute; left: 0; top: -8%; width: 100%; height: 116%; object-fit: cover; will-change: transform; }
+.photo::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); background: linear-gradient(180deg, transparent 60%, rgba(11,31,58,0.18)); pointer-events: none; }
+.panel-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.16; mix-blend-mode: luminosity; pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, rgba(0,0,0,0.5) 38%, transparent 58%); mask-image: linear-gradient(90deg, #000 0%, rgba(0,0,0,0.5) 38%, transparent 58%); }
+.panel-photo--cta { opacity: 0.42; mix-blend-mode: normal; -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 40%); mask-image: linear-gradient(180deg, transparent 0%, #000 40%); }
+.cta::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 46% 60% at 50% 52%, rgba(9,25,48,0.86) 0%, rgba(9,25,48,0.55) 55%, transparent 100%); }
+.cta .cta-canvas { z-index: 1; }
+.panel-navy > .wrap { position: relative; z-index: 1; }
+.cta .panel-photo { z-index: 0; }
