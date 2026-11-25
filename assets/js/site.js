@@ -116,7 +116,7 @@
 
   /* smooth scroll */
   if (!reduce && typeof window.Lenis !== 'undefined') {
-    var lenis = new window.Lenis({ duration: 1.15, easing: function (t) { return Math.min(1, 1.001 - Math.pow(2, -10 * t)); }, smoothWheel: true });
+    var lenis = new window.Lenis({ lerp: 0.11, smoothWheel: true, wheelMultiplier: 0.95, touchMultiplier: 1.4 });
     AEVUM.lenis = lenis;
     lenis.on('scroll', ST.update);
     gsap.ticker.add(function (time) { lenis.raf(time * 1000); });
@@ -158,19 +158,21 @@
     walk(h);
     var words = h.querySelectorAll('.w > span');
     var inHero = !!h.closest('.hero');
-    gsap.to(words, {
-      y: 0, duration: 1.1, ease: 'expo.out', stagger: 0.045, delay: inHero ? 0.55 : 0,
-      scrollTrigger: inHero ? null : { trigger: h, start: 'top 88%' }
-    });
+    var play = function () { gsap.to(words, { y: 0, duration: 1.1, ease: 'expo.out', stagger: 0.045, delay: inHero ? 0.55 : 0 }); };
+    if (inHero) play();
+    else {
+      var hio = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { hio.disconnect(); play(); } }, { rootMargin: '0px 0px -10% 0px' });
+      hio.observe(h);
+    }
   });
 
   /* generic reveals, batched for stagger */
-  ST.batch('[data-reveal]', {
-    start: 'top 90%',
-    onEnter: function (els) {
-      gsap.to(els, { opacity: 1, y: 0, duration: 1.1, ease: 'expo.out', stagger: 0.09, overwrite: true });
-    }
-  });
+  // IntersectionObserver (not scroll math) so fast flings and anchor jumps can never strand hidden copy
+  var revealIO = new IntersectionObserver(function (entries) {
+    var batch = entries.filter(function (e) { return e.isIntersecting; }).map(function (e) { revealIO.unobserve(e.target); return e.target; });
+    if (batch.length) gsap.to(batch, { opacity: 1, y: 0, duration: 1.1, ease: 'expo.out', stagger: 0.09, overwrite: true });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0 });
+  document.querySelectorAll('[data-reveal]').forEach(function (el) { if (!el.closest('.hero')) revealIO.observe(el); });
   // hero reveals fire on load
   var heroReveals = document.querySelectorAll('.hero [data-reveal]');
   if (heroReveals.length) gsap.to(heroReveals, { opacity: 1, y: 0, duration: 1.2, ease: 'expo.out', stagger: 0.1, delay: 0.7 });
@@ -187,7 +189,7 @@
     setTimeout(function () {
       document.querySelectorAll('[data-reveal]').forEach(function (el) {
         var r = el.getBoundingClientRect();
-        if (r.top < window.innerHeight && getComputedStyle(el).opacity === '0') gsap.to(el, { opacity: 1, y: 0, duration: 0.8, clearProps: 'transform,opacity' });
+        if (r.top < window.innerHeight && getComputedStyle(el).opacity === '0') gsap.to(el, { opacity: 1, y: 0, duration: 0.8 });
       });
     }, 4000);
   });

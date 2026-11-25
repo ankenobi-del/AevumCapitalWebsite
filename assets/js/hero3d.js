@@ -21,13 +21,16 @@ function init(host) {
     document.documentElement.classList.add('no-webgl');
     return;
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, small ? 1.5 : 1.75));
+  const maxPR = Math.min(window.devicePixelRatio || 1, small ? 1.5 : 1.6);
+  let pr = maxPR;
+  renderer.setPixelRatio(pr);
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; // refreshed on a cadence in the loop
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -47,10 +50,10 @@ function init(host) {
   };
   const M = {
     porcelain: new THREE.MeshPhysicalMaterial({ color: C.porcelain, roughness: 0.32, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.25 }),
-    tile: new THREE.MeshPhysicalMaterial({ color: '#f6f4ef', roughness: 0.4, clearcoat: 0.5, clearcoatRoughness: 0.3, transparent: true, opacity: 0.92 }),
+    tile: new THREE.MeshStandardMaterial({ color: '#f7f5f0', roughness: 0.42, metalness: 0 }),
     gold: new THREE.MeshPhysicalMaterial({ color: C.gold, metalness: 1, roughness: 0.22, clearcoat: 0.4, clearcoatRoughness: 0.2 }),
     goldSatin: new THREE.MeshPhysicalMaterial({ color: '#c9a74a', metalness: 0.95, roughness: 0.38 }),
-    navyGlass: new THREE.MeshPhysicalMaterial({ color: '#0f2a55', metalness: 0.35, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.06, transparent: true, opacity: 0.94, iridescence: 0.18, iridescenceIOR: 1.25 }),
+    navyGlass: new THREE.MeshPhysicalMaterial({ color: '#0f2a55', metalness: 0.35, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.08 }),
     navySolid: new THREE.MeshPhysicalMaterial({ color: C.navy3, metalness: 0.2, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.1 }),
     glass: new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, metalness: 0, clearcoat: 1, transparent: true, opacity: 0.42 }),
     ink: new THREE.MeshBasicMaterial({ color: '#0b1f3a', transparent: true, opacity: 0.18 }),
@@ -108,18 +111,21 @@ function init(host) {
   scene.add(new THREE.HemisphereLight('#ffffff', '#e9e3d6', 1.1));
   const key = new THREE.DirectionalLight('#fff6e6', 2.4);
   key.position.set(9, 16, 7); key.castShadow = true;
-  key.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
+  key.shadow.mapSize.set(small ? 1024 : 1536, small ? 1024 : 1536);
   Object.assign(key.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 50 });
   key.shadow.radius = 6; key.shadow.bias = -0.0004;
   scene.add(key);
   const rim = new THREE.DirectionalLight('#a9c2ff', 0.8); rim.position.set(-10, 6, -8); scene.add(rim);
 
   /* ---------- object layout ---------- */
+  // placed in screen terms (sx = across, d = toward camera) then mapped to world x/z
+  const S2 = Math.SQRT1_2;
+  const at = (sx, d) => new THREE.Vector3((sx + d) * S2, 0, (d - sx) * S2);
   const spots = {
-    coins: new THREE.Vector3(-6.2, 0, 3.4),
-    bars: new THREE.Vector3(6.4, 0, -2.6),
-    chart: new THREE.Vector3(3.6, 0, 6.6),
-    doc: new THREE.Vector3(-4.6, 0, -6.0)
+    coins: at(-5.4, 4.2),
+    chart: at(3.0, 8.2),
+    bars: at(7.0, -0.6),
+    doc: at(-4.2, -5.8)
   };
   const anim = []; // per-frame updaters (t, dt)
 
@@ -136,7 +142,7 @@ function init(host) {
       cells.push({ x, z, ph: rnd() * 6.28, h: rnd() < 0.18 ? 0.35 : 0 });
     }
     const inst = new THREE.InstancedMesh(geo, M.tile, cells.length);
-    inst.castShadow = true; inst.receiveShadow = true;
+    inst.castShadow = false; inst.receiveShadow = true;
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
     world.add(inst);
     anim.push((t) => {
@@ -165,7 +171,7 @@ function init(host) {
       const sh = new THREE.Shape();
       sh.absarc(0, 0, 3.55, a0, a1, false);
       sh.absarc(0, 0, 2.75, a1, a0, true);
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.62, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 5, curveSegments: 64 });
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 5, curveSegments: 64 });
       const m = shadowy(new THREE.Mesh(g, M.navyGlass));
       m.rotation.x = -Math.PI / 2; ringG.add(m);
     });
@@ -216,10 +222,10 @@ function init(host) {
     seal.position.set(0.7, 0.0, 1.0); stack.add(seal);
     const sealStar = new THREE.Mesh(extrude(starShape(0.4, 0.05), 0.06, 0.02), M.goldSatin);
     sealStar.rotation.x = -Math.PI / 2; sealStar.position.y = 0.1; seal.add(sealStar);
-    stack.rotation.x = 0.55;
+    stack.rotation.x = 0.5; stack.position.y = 1.5; stack.scale.setScalar(0.92);
     anim.push((t) => { stack.rotation.y = Math.sin(t * 0.4) * 0.5 - 0.3; seal.rotation.y = t * 0.8; });
   } else { // columns
-    const temple = new THREE.Group(); temple.position.y = -2.0; hero.add(temple);
+    const temple = new THREE.Group(); temple.position.y = -1.25; temple.scale.setScalar(0.82); hero.add(temple);
     const stepsGeo = [[4.2, 0.22, 2.2], [3.8, 0.22, 1.9]];
     stepsGeo.forEach((s, i) => { const m = shadowy(new THREE.Mesh(new RoundedBoxGeometry(s[0], s[1], s[2], 2, 0.05), M.porcelain)); m.position.y = 0.11 + i * 0.22; temple.add(m); });
     for (let i = 0; i < 3; i++) {
@@ -315,18 +321,18 @@ function init(host) {
   {
     const g = pedestal(spots.chart, 2.4, 1.2, 0.4);
     const panel = new THREE.Group(); panel.position.set(0, g.userData.top + 1.25, 0); panel.rotation.y = Math.PI / 4 - 0.15; g.add(panel);
-    const glassP = shadowy(new THREE.Mesh(new RoundedBoxGeometry(3.0, 2.1, 0.09, 3, 0.04), M.glass));
+    const glassP = shadowy(new THREE.Mesh(new RoundedBoxGeometry(3.0, 2.1, 0.09, 3, 0.04), new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.18, clearcoat: 1, transparent: true, opacity: 0.86 })));
     panel.add(glassP);
     const frame = new THREE.Mesh(new RoundedBoxGeometry(3.04, 2.14, 0.05, 3, 0.03), new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.2, transparent: true, opacity: 0.5 }));
     frame.position.z = -0.03; panel.add(frame);
     for (let i = 0; i < 3; i++) {
-      const gl = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.012, 0.01), M.ink); gl.position.set(0, -0.6 + i * 0.55, 0.06); panel.add(gl);
+      const gl = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.014, 0.01), M.ink); gl.position.set(0, -0.6 + i * 0.55, 0.06); panel.add(gl);
     }
     const pts = [];
     const ys = [-0.75, -0.55, -0.62, -0.3, -0.36, -0.05, 0.12, 0.05, 0.38, 0.55, 0.78];
     ys.forEach((y, i) => pts.push(new THREE.Vector3(-1.3 + i * 0.26, y, 0.08)));
     const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
-    const tube = new THREE.TubeGeometry(curve, 160, 0.035, 8, false);
+    const tube = new THREE.TubeGeometry(curve, 160, 0.05, 8, false);
     const line = new THREE.Mesh(tube, M.glow); panel.add(line);
     const total = tube.index.count;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), M.glow); head.add(halo(0.8, 0.9)); panel.add(head);
@@ -358,14 +364,16 @@ function init(host) {
   /* ---------- glowing data paths with travelling pulses ---------- */
   {
     const y = 0.03;
-    const routes = [
-      [[-4.2, 0], [-6.2, 0], [-6.2, 1.9]],
-      [[3.2, -2.2], [6.4, -2.2], [6.4, -1.5]],
-      [[1.6, 4.0], [1.6, 6.6], [2.3, 6.6]],
-      [[-2.2, -3.6], [-4.6, -3.6], [-4.6, -4.7]],
-      [[-6.2, 4.6], [-6.2, 8.5], [-1.0, 8.5], [-1.0, 11.0]],
-      [[7.9, -2.6], [10.5, -2.6], [10.5, 3.0], [12.5, 3.0]]
-    ];
+    // L-shaped traces from the platform rim to each pedestal, plus two running off-stage
+    const routes = Object.values(spots).map((s) => {
+      const L = Math.hypot(s.x, s.z), ux = s.x / L, uz = s.z / L;
+      const p0 = [ux * 4.9, uz * 4.9], end = [s.x - ux * 1.7, s.z - uz * 1.7];
+      const dx = end[0] - p0[0], dz = end[1] - p0[1];
+      if (Math.min(Math.abs(dx), Math.abs(dz)) < 0.7) return [p0, end];
+      return Math.abs(dx) > Math.abs(dz) ? [p0, [p0[0], end[1]], end] : [p0, [end[0], p0[1]], end];
+    });
+    routes.push([[spots.chart.x + 1.4, spots.chart.z], [12.5, spots.chart.z], [12.5, spots.chart.z - 5]]);
+    routes.push([[spots.bars.x, spots.bars.z - 1.2], [spots.bars.x, -12.5], [spots.bars.x - 5, -12.5]]);
     routes.forEach((r, ri) => {
       const pts = [];
       r.forEach((p, i) => {
@@ -417,7 +425,7 @@ function init(host) {
     const dist = mobile ? 58 : (w / h > 1.9 ? 44 : 48);
     camBase.set(1, 0.88, 1).normalize().multiplyScalar(dist);
     if (mobile) camera.setViewOffset(w, h, 0, h * 0.2, w, h);
-    else camera.setViewOffset(w, h, -w * 0.22, h * 0.03, w, h);
+    else camera.setViewOffset(w, h, -w * 0.24, h * 0.03, w, h);
     camera.updateProjectionMatrix();
   }
   layout();
@@ -426,13 +434,13 @@ function init(host) {
   /* ---------- interaction ---------- */
   const ptr = { x: 0, y: 0, sx: 0, sy: 0 };
   window.addEventListener('pointermove', (e) => { ptr.x = e.clientX / window.innerWidth - 0.5; ptr.y = e.clientY / window.innerHeight - 0.5; }, { passive: true });
-  let scrollP = 0;
+  let scrollP = 0, scrollS = 0;
   const onScroll = () => { scrollP = Math.min(1, Math.max(0, window.scrollY / (host.clientHeight || 1))); };
   window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
   /* ---------- loop ---------- */
   const clock = new THREE.Clock();
-  let t = 0, running = false, visible = true;
+  let t = 0, running = false, visible = true, lastOp = '', frameN = 0, slow = 0, fast = 0;
   function update(dt) {
     t += dt;
     anim.forEach(f => f(t, dt));
@@ -443,15 +451,24 @@ function init(host) {
     camera.position.z += -ptr.sx * 3.2 - ptr.sy * 1.2;
     camera.position.y += ptr.sy * 2.0;
     camera.lookAt(look);
-    world.rotation.y = scrollP * 0.35;
-    world.position.y = -scrollP * 2.0;
-    renderer.domElement.style.opacity = String(1 - scrollP * 0.85);
+    scrollS += (scrollP - scrollS) * (dt ? Math.min(1, dt * 8) : 1);
+    world.rotation.y = scrollS * 0.35;
+    world.position.y = -scrollS * 2.0;
+    const op = (1 - scrollS * 0.85).toFixed(3);
+    if (op !== lastOp) { renderer.domElement.style.opacity = op; lastOp = op; }
   }
-  function renderOnce() { update(0); renderer.render(scene, camera); }
+  function renderOnce() { update(0); renderer.shadowMap.needsUpdate = true; renderer.render(scene, camera); }
   function frame() {
     if (!running) return;
-    update(Math.min(0.05, clock.getDelta()));
+    const raw = clock.getDelta();
+    update(Math.min(0.05, raw));
+    // shadows only move with the slow-moving pieces; refresh them every other frame
+    if ((frameN++ & 1) === 0) renderer.shadowMap.needsUpdate = true;
     renderer.render(scene, camera);
+    // adaptive resolution: drop pixel ratio when frames run long, restore when there is headroom
+    if (raw > 0.024) { slow++; fast = 0; } else if (raw < 0.013) { fast++; slow = 0; }
+    if (slow > 40 && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); layout(); slow = 0; }
+    else if (fast > 240 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); layout(); fast = 0; }
     requestAnimationFrame(frame);
   }
   function setRunning(on) {

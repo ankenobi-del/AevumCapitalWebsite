@@ -103,7 +103,7 @@
       ctx.restore();
       // labels
       ctx.font = '600 12px Onest, sans-serif'; ctx.fillStyle = NAVY; ctx.fillText('Death benefit', X(0), dbY - 10);
-      if (p > 0.6) { ctx.fillStyle = '#9a7a26'; ctx.globalAlpha = Math.min(1, (p - 0.6) * 3); ctx.fillText('Cash value', X(0.6), h * 0.62); ctx.globalAlpha = 1; }
+      if (p > 0.7) { var cu = 0.66, cy = h - pad - (h - pad - dbY - 8) * Math.pow(cu, 1.7); ctx.fillStyle = '#8a6a1c'; ctx.globalAlpha = Math.min(1, (p - 0.7) * 4); ctx.fillText('Cash value', X(cu) + 6, cy + 24); ctx.globalAlpha = 1; }
       // head dot
       var hu = Math.min(p, 1), hy = h - pad - (h - pad - dbY - 8) * Math.pow(hu, 1.7);
       ctx.beginPath(); ctx.arc(X(hu), hy, 5, 0, 6.283); ctx.fillStyle = GOLD; ctx.fill();
@@ -132,10 +132,11 @@
     pol.sort(function (a, b) { return a.m - b.m; });
     var clock = 0;
     var drawPort = function () {
-      var w = pm.w, h = pm.h, top = 8, laneH = (h * 0.55) / 7, base = h - 6;
+      var w = pm.w, h = pm.h, top = 26, laneH = (h * 0.56 - top) / 7, base = h - 6;
       pctx.clearRect(0, 0, w, h);
       var cyc = (clock % 9) / 7.5; // 0..1.2 then restart
       var tcur = Math.min(1, cyc);
+      pctx.globalAlpha = cyc > 1.08 ? Math.max(0, 1 - (cyc - 1.08) / 0.1) : Math.min(1, cyc / 0.04);
       // policies as tokens
       var matured = 0;
       pol.forEach(function (p) {
@@ -158,7 +159,7 @@
       pctx.strokeStyle = 'rgba(255,255,255,0.25)'; pctx.setLineDash([3, 4]); pctx.lineWidth = 1;
       pctx.beginPath(); pctx.moveTo(cx, top); pctx.lineTo(cx, base); pctx.stroke(); pctx.setLineDash([]);
       // cumulative proceeds step line
-      var floorY = base, ceilY = h * 0.62;
+      var floorY = base, ceilY = h * 0.64;
       pctx.beginPath(); pctx.moveTo(10, floorY);
       var c = 0;
       pol.forEach(function (p) {
@@ -178,8 +179,9 @@
         if (!i) pctx.moveTo(10 + u * (w - 20), yy); else pctx.lineTo(10 + u * (w - 20), yy);
       }
       pctx.strokeStyle = 'rgba(255,255,255,0.28)'; pctx.setLineDash([4, 5]); pctx.lineWidth = 1.2; pctx.stroke(); pctx.setLineDash([]);
+      pctx.globalAlpha = 1;
       pctx.font = '600 11.5px Onest, sans-serif'; pctx.fillStyle = 'rgba(232,236,243,0.65)';
-      pctx.fillText('Policies maturing: ' + matured + ' / ' + N, 10, h * 0.62 - 10);
+      pctx.fillText('Policies matured: ' + matured + ' / ' + N, 10, 13);
     };
     if (reduce) { clock = 7.5; drawPort(); }
     else loop(port, function (dt) { clock += dt; drawPort(); });
@@ -191,116 +193,226 @@
   var sig = $('#signal');
   if (sig) {
     var sm = fitCanvas(sig), sctx = sm.ctx, R2 = rng(42);
-    var mkt = [], act = [], len = 220, mv = 0, vol = 1, shock = 0, shockLabel = 0, av = 0;
-    for (var q = 0; q < len; q++) stepSignal();
+    var mkt = [], act = [], shk = [], len = 200, mv = 0, vol = 1, shock = 0, av = 0;
+    var STEP = 0.07, acc = 0, matured = 0, drawdownA = 0;
+    var view = null; // eased axis ranges so the chart never snaps when samples scroll off
     function stepSignal() {
       // market: mean-reverting random walk with volatility clustering and occasional drawdowns
-      if (R2() < 0.012 && shock <= 0) { shock = 22; shockLabel = 1.6; }
+      if (R2() < 0.012 && shock <= 0) shock = 22;
       vol = 0.85 * vol + 0.15 * (0.6 + R2() * 1.6);
       var drift = shock > 0 ? -0.9 : 0.06;
-      if (shock > 0) shock--;
-      mv += drift + (R2() - 0.5) * 2.6 * vol - mv * 0.025;
-      mkt.push(mv);
+      mkt.push(mv += drift + (R2() - 0.5) * 2.6 * vol - mv * 0.025);
+      shk.push(shock > 0); if (shock > 0) shock--;
       // actuarial: maturities arrive at a steady statistical pace regardless of the market
-      av += 0.35 + (R2() < 0.18 ? 1.4 : 0);
-      act.push(av);
-      if (mkt.length > len) { mkt.shift(); act.shift(); }
+      var hit = R2() < 0.18; if (hit) matured++;
+      act.push(av += 0.35 + (hit ? 1.4 : 0));
+      if (mkt.length > len + 1) { mkt.shift(); act.shift(); shk.shift(); }
     }
-    var acc = 0;
-    var drawSig = function () {
-      var w = sm.w, h = sm.h, mid = h * 0.5;
+    for (var q = 0; q < len + 1; q++) stepSignal();
+    function ranges() {
+      var mn = Infinity, mx = -Infinity;
+      for (var i = 0; i < mkt.length; i++) { if (mkt[i] < mn) mn = mkt[i]; if (mkt[i] > mx) mx = mkt[i]; }
+      var pad = Math.max(4, (mx - mn) * 0.12);
+      return { mn: mn - pad, mx: mx + pad, a0: act[0], a1: act[act.length - 1] };
+    }
+    function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+    function pill(c, txt, x, y, fg, bg) {
+      c.font = '600 11px Onest, sans-serif';
+      var tw = c.measureText(txt).width, pw = tw + 20;
+      rr(c, x - pw, y - 10, pw, 20, 10); c.fillStyle = bg; c.fill();
+      c.fillStyle = fg; c.textAlign = 'right'; c.fillText(txt, x - 10, y + 4); c.textAlign = 'left';
+    }
+    var drawSig = function (dt) {
+      var w = sm.w, h = sm.h, gap = 14, head = 30, laneH = (h - gap) / 2, frac = acc / STEP;
+      var tr = ranges();
+      if (!view) view = tr;
+      var k = dt ? Math.min(1, dt * 2.5) : 1;
+      for (var key in tr) view[key] += (tr[key] - view[key]) * k;
       sctx.clearRect(0, 0, w, h);
-      // lane backgrounds
-      sctx.fillStyle = 'rgba(255,255,255,0.03)'; sctx.fillRect(0, 0, w, mid - 8); sctx.fillRect(0, mid + 8, w, h - mid - 8);
-      sctx.strokeStyle = 'rgba(255,255,255,0.06)'; sctx.lineWidth = 1;
-      for (var g = 1; g < 6; g++) { var gx = (w * g) / 6; sctx.beginPath(); sctx.moveTo(gx, 0); sctx.lineTo(gx, h); sctx.stroke(); }
-      var X = function (i) { return (i / (len - 1)) * w; };
-      // market lane
-      var mn = Math.min.apply(null, mkt), mx = Math.max.apply(null, mkt), span = Math.max(8, mx - mn);
-      var MY = function (v) { return 18 + (1 - (v - mn) / span) * (mid - 44); };
+      var X = function (i) { return ((i - frac) / (len - 1)) * w; };
+      var lanes = [{ y: 0, label: 'Equity & bond markets', sub: 'sentiment and cycles', col: 'rgba(196,208,226,0.95)' },
+                   { y: laneH + gap, label: 'Policy maturities', sub: 'actuarial outcomes', col: GOLD2 }];
+      lanes.forEach(function (L) {
+        rr(sctx, 0, L.y, w, laneH, 14); sctx.fillStyle = 'rgba(255,255,255,0.035)'; sctx.fill();
+        sctx.strokeStyle = 'rgba(255,255,255,0.07)'; sctx.lineWidth = 1; sctx.stroke();
+        sctx.beginPath(); sctx.arc(16, L.y + 18, 4, 0, 6.283); sctx.fillStyle = L.col; sctx.fill();
+        sctx.font = '600 12.5px Onest, sans-serif'; sctx.fillStyle = '#fff'; sctx.fillText(L.label, 28, L.y + 22);
+        var lw = sctx.measureText(L.label).width;
+        sctx.font = '500 12px Onest, sans-serif'; sctx.fillStyle = 'rgba(232,236,243,0.5)';
+        if (w > 380) sctx.fillText('· ' + L.sub, 34 + lw, L.y + 22);
+      });
+      // ---- market lane
+      var mTop = head + 6, mBot = laneH - 12;
+      var MY = function (v) { return mTop + (1 - (v - view.mn) / Math.max(1, view.mx - view.mn)) * (mBot - mTop); };
+      sctx.save(); rr(sctx, 0, 0, w, laneH, 14); sctx.clip();
+      sctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      for (var g = 1; g < 6; g++) { var gx = (w * g) / 6; sctx.beginPath(); sctx.moveTo(gx, mTop); sctx.lineTo(gx, mBot); sctx.stroke(); }
+      // drawdown bands
+      sctx.fillStyle = 'rgba(255,120,100,0.10)';
+      for (var i = 0, st = -1; i <= shk.length; i++) {
+        if (i < shk.length && shk[i]) { if (st < 0) st = i; }
+        else if (st >= 0) { sctx.fillRect(X(st), mTop - 4, X(i - 1) - X(st), mBot - mTop + 8); st = -1; }
+      }
       sctx.beginPath();
-      mkt.forEach(function (v, i) { if (!i) sctx.moveTo(X(i), MY(v)); else sctx.lineTo(X(i), MY(v)); });
-      sctx.strokeStyle = 'rgba(160,178,205,0.9)'; sctx.lineWidth = 1.6; sctx.stroke();
-      // actuarial lane: rescale window to show steady slope
-      var a0 = act[0], a1 = act[act.length - 1];
-      var AY = function (v) { return h - 16 - ((v - a0) / Math.max(1, a1 - a0)) * (h - mid - 50); };
-      var grad = sctx.createLinearGradient(0, mid, 0, h);
-      grad.addColorStop(0, 'rgba(226,182,83,0.28)'); grad.addColorStop(1, 'rgba(226,182,83,0)');
-      sctx.beginPath(); sctx.moveTo(0, h - 8);
-      act.forEach(function (v, i) { sctx.lineTo(X(i), AY(v)); });
-      sctx.lineTo(w, h - 8); sctx.closePath(); sctx.fillStyle = grad; sctx.fill();
+      for (i = 0; i < mkt.length; i++) { var x = X(i), y = MY(mkt[i]); if (!i) sctx.moveTo(x, y); else sctx.lineTo(x, y); }
+      sctx.lineJoin = 'round'; sctx.strokeStyle = 'rgba(196,208,226,0.95)'; sctx.lineWidth = 1.6; sctx.stroke();
+      var hx = X(mkt.length - 1), hy = MY(mkt[mkt.length - 1]);
+      sctx.beginPath(); sctx.arc(hx - 3, hy, 4, 0, 6.283); sctx.fillStyle = '#dfe6f2'; sctx.fill();
+      sctx.restore();
+      // ---- maturity lane
+      var oy = laneH + gap, aTop = oy + head + 8, aBot = oy + laneH - 10;
+      var AY = function (v) { return aBot - ((v - view.a0) / Math.max(1, view.a1 - view.a0)) * (aBot - aTop); };
+      sctx.save(); rr(sctx, 0, oy, w, laneH, 14); sctx.clip();
+      var grad = sctx.createLinearGradient(0, aTop, 0, aBot);
+      grad.addColorStop(0, 'rgba(226,182,83,0.30)'); grad.addColorStop(1, 'rgba(226,182,83,0)');
+      sctx.beginPath(); sctx.moveTo(X(0), aBot + 10);
+      for (i = 0; i < act.length; i++) sctx.lineTo(X(i), AY(act[i]));
+      sctx.lineTo(X(act.length - 1), aBot + 10); sctx.closePath(); sctx.fillStyle = grad; sctx.fill();
       sctx.beginPath();
-      act.forEach(function (v, i) { if (!i) sctx.moveTo(X(i), AY(v)); else sctx.lineTo(X(i), AY(v)); });
+      for (i = 0; i < act.length; i++) { if (!i) sctx.moveTo(X(i), AY(act[i])); else sctx.lineTo(X(i), AY(act[i])); }
       sctx.strokeStyle = GOLD2; sctx.lineWidth = 2.2; sctx.stroke();
-      // maturity events as dots
-      for (var i = 1; i < act.length; i++) {
-        if (act[i] - act[i - 1] > 1) { sctx.beginPath(); sctx.arc(X(i), AY(act[i]), 3, 0, 6.283); sctx.fillStyle = GOLD2; sctx.fill(); }
-      }
-      // heads
-      var lx = X(len - 1);
-      sctx.beginPath(); sctx.arc(lx - 2, MY(mkt[len - 1]), 4, 0, 6.283); sctx.fillStyle = '#c9d4e6'; sctx.fill();
-      sctx.beginPath(); sctx.arc(lx - 2, AY(act[len - 1]), 4.5, 0, 6.283); sctx.fillStyle = GOLD2; sctx.fill();
-      // labels
-      sctx.font = '600 12px Onest, sans-serif';
-      sctx.fillStyle = 'rgba(232,236,243,0.7)'; sctx.fillText('Equity & bond markets: driven by sentiment and cycles', 12, 16);
-      sctx.fillStyle = GOLD2; sctx.fillText('Policy maturities: driven by actuarial outcomes', 12, mid + 26);
-      if (shockLabel > 0) {
-        sctx.globalAlpha = Math.min(1, shockLabel);
-        sctx.fillStyle = 'rgba(255,140,120,0.95)'; sctx.font = '600 11px Onest, sans-serif';
-        sctx.fillText('Market drawdown', lx - 112, MY(mkt[len - 1]) + 20);
-        sctx.globalAlpha = 1;
-      }
+      sctx.fillStyle = GOLD2;
+      for (i = 1; i < act.length; i++) if (act[i] - act[i - 1] > 1) { sctx.beginPath(); sctx.arc(X(i), AY(act[i]), 2.6, 0, 6.283); sctx.fill(); }
+      var ax = X(act.length - 1), ay = AY(act[act.length - 1]);
+      var pulse = 0.5 + 0.5 * Math.sin(performance.now() / 260);
+      sctx.beginPath(); sctx.arc(ax - 3, ay, 8 + pulse * 4, 0, 6.283); sctx.fillStyle = 'rgba(226,182,83,' + (0.18 - pulse * 0.1) + ')'; sctx.fill();
+      sctx.beginPath(); sctx.arc(ax - 3, ay, 4.5, 0, 6.283); sctx.fillStyle = GOLD2; sctx.fill();
+      sctx.restore();
+      // status pills live in the header row, never on the plot
+      var inShock = shk[shk.length - 1] || shk[shk.length - 8];
+      drawdownA += ((inShock ? 1 : 0) - drawdownA) * (dt ? Math.min(1, dt * 4) : 1);
+      if (drawdownA > 0.02 && w > 330) { sctx.globalAlpha = drawdownA; pill(sctx, 'Drawdown', w - 10, 18, '#ffb3a6', 'rgba(255,120,100,0.16)'); sctx.globalAlpha = 1; }
+      if (w > 330) pill(sctx, 'Steady pace', w - 10, oy + 18, GOLD2, 'rgba(226,182,83,0.14)');
     };
-    if (reduce) drawSig();
+    if (reduce) drawSig(0);
     else loop(sig, function (dt) {
-      acc += dt; shockLabel = Math.max(0, shockLabel - dt * 0.5);
-      while (acc > 0.05) { acc -= 0.05; stepSignal(); }
-      drawSig();
+      acc += dt;
+      while (acc >= STEP) { acc -= STEP; stepSignal(); }
+      drawSig(dt);
     });
-    window.addEventListener('resize', function () { sm = fitCanvas(sig); sctx = sm.ctx; drawSig(); });
+    window.addEventListener('resize', function () { sm = fitCanvas(sig); sctx = sm.ctx; drawSig(0); });
   }
 
-  /* ---------- CTA: gold star particle field ---------- */
+  /* ---------- CTA: gold star constellation (kept clear of the copy) ---------- */
   $$('.cta-canvas').forEach(function (cv) {
-    var cmz = fitCanvas(cv), c = cmz.ctx, pts = [], R3 = rng(11), mouse = { x: -999, y: -999 };
-    function star(t) { // four-point star outline, t in 0..1
-      var a = t * Math.PI * 2, k = Math.pow(Math.abs(Math.cos(2 * a)), 6);
-      var r = 0.18 + 0.82 * k;
-      return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+    var host = cv.parentElement, cmz, c, R3, mouse = { x: -9999, y: -9999 }, dust = [], pts = [], clear = { x0: 0, y0: 0, x1: 0, y1: 0 }, centers = [];
+    function sprite(rgb) {
+      var s = document.createElement('canvas'); s.width = s.height = 48;
+      var g = s.getContext('2d'), gr = g.createRadialGradient(24, 24, 0, 24, 24, 24);
+      gr.addColorStop(0, 'rgba(' + rgb + ',1)'); gr.addColorStop(0.18, 'rgba(' + rgb + ',0.85)'); gr.addColorStop(0.45, 'rgba(' + rgb + ',0.18)'); gr.addColorStop(1, 'rgba(' + rgb + ',0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 48, 48); return s;
+    }
+    var GS = sprite('246,208,120'), WS = sprite('214,224,240');
+    function starPt(t) { // four-point star outline (concave sides like the logo mark)
+      var a = t * Math.PI * 2, k = Math.pow(Math.abs(Math.cos(2 * a)), 5);
+      var r = 0.16 + 0.84 * k;
+      return { x: Math.cos(a - Math.PI / 2) * r, y: Math.sin(a - Math.PI / 2) * r };
+    }
+    function measure() {
+      var cr = cv.getBoundingClientRect(), x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, rg = document.createRange();
+      Array.prototype.forEach.call(host.children, function (ch) {
+        if (ch === cv) return;
+        var rects = [];
+        if (ch.classList.contains('hero-actions')) rects = Array.prototype.map.call(ch.children, function (b) { return b.getBoundingClientRect(); });
+        else { rg.selectNodeContents(ch); rects = [rg.getBoundingClientRect()]; }
+        rects.forEach(function (r) { if (!r.width) return; x0 = Math.min(x0, r.left); y0 = Math.min(y0, r.top); x1 = Math.max(x1, r.right); y1 = Math.max(y1, r.bottom); });
+      });
+      // text rects include reveal offsets; that is fine, the pad absorbs them
+      clear = { x0: x0 - cr.left - 36, y0: y0 - cr.top - 30, x1: x1 - cr.left + 36, y1: y1 - cr.top + 40 };
     }
     function build() {
-      pts = [];
-      var n = Math.min(520, Math.round(cmz.w * cmz.h / 1500));
-      for (var i = 0; i < n; i++) {
-        var onStar = i < n * 0.55;
-        var s = star(R3());
-        var scale = Math.min(cmz.w, cmz.h) * 0.42 * (onStar ? (0.86 + R3() * 0.16) : 1);
-        var hx = onStar ? cmz.w / 2 + s.x * scale : R3() * cmz.w;
-        var hy = onStar ? cmz.h / 2 + s.y * scale : R3() * cmz.h;
-        pts.push({ hx: hx, hy: hy, x: R3() * cmz.w, y: R3() * cmz.h, vx: 0, vy: 0, r: onStar ? 1 + R3() * 1.4 : 0.6 + R3() * 0.9, star: onStar, ph: R3() * 6.28 });
+      cmz = fitCanvas(cv); c = cmz.ctx; R3 = rng(11); measure();
+      var w = cmz.w, h = cmz.h, side = Math.min(clear.x0, w - clear.x1);
+      centers = [];
+      if (side > 150) {
+        var s = Math.min(side * 0.3, h * 0.2, 90);
+        centers.push({ x: clear.x0 / 2, y: h * 0.46, s: s * 0.72, ph: 0 }, { x: (clear.x1 + w) / 2, y: h * 0.54, s: s, ph: 2 });
+      } else if (clear.y0 > 120) {
+        centers.push({ x: w / 2, y: clear.y0 * 0.52, s: Math.min(clear.y0 * 0.3, 52), ph: 0 });
       }
+      pts = [];
+      centers.forEach(function (ce) {
+        var n = Math.round(Math.min(90, 30 + ce.s * 0.6));
+        for (var i = 0; i < n; i++) pts.push({ ce: ce, t: R3(), sp: (0.012 + R3() * 0.02) * (R3() < 0.5 ? 1 : -1), off: 1.08 + R3() * 0.35, size: 3 + R3() * 6, ph: R3() * 6.28 });
+      });
+      dust = [];
+      var nd = Math.round(Math.min(160, w * h / 6000));
+      for (var d = 0; d < nd; d++) dust.push({ x: R3() * w, y: R3() * h, v: 4 + R3() * 10, size: 3 + R3() * 5, ph: R3() * 6.28, gold: R3() < 0.3 });
     }
-    build();
-    cv.parentElement.addEventListener('pointermove', function (e) { var r = cv.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; });
-    cv.parentElement.addEventListener('pointerleave', function () { mouse.x = mouse.y = -999; });
-    var time = 0;
+    // crisp four-point star like the logo mark: concave sides via quadratic curves
+    function starPath(cx, cy, R, rot) {
+      var r = R * 0.16;
+      c.beginPath();
+      for (var i = 0; i <= 4; i++) {
+        var a = -Math.PI / 2 + rot + i * Math.PI / 2, tx = cx + Math.cos(a) * R, ty = cy + Math.sin(a) * R;
+        if (!i) { c.moveTo(tx, ty); continue; }
+        var ca = a - Math.PI / 4; c.quadraticCurveTo(cx + Math.cos(ca) * r, cy + Math.sin(ca) * r, tx, ty);
+      }
+      c.closePath();
+    }
+    // 0 inside the copy's box, rising to 1 a little outside it
+    function fade(x, y) {
+      var dx = Math.max(clear.x0 - x, 0, x - clear.x1), dy = Math.max(clear.y0 - y, 0, y - clear.y1);
+      return Math.min(1, Math.hypot(dx, dy) / 60);
+    }
+    host.addEventListener('pointermove', function (e) { var r = cv.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; });
+    host.addEventListener('pointerleave', function () { mouse.x = mouse.y = -9999; });
+    var time = 0, par = { x: 0, y: 0 };
     function frame(dt) {
       time += dt;
-      c.clearRect(0, 0, cmz.w, cmz.h);
-      pts.forEach(function (p) {
-        var tx = p.hx + Math.sin(time * 0.6 + p.ph) * (p.star ? 2 : 14), ty = p.hy + Math.cos(time * 0.5 + p.ph) * (p.star ? 2 : 14);
-        var dx = p.x - mouse.x, dy = p.y - mouse.y, d2 = dx * dx + dy * dy;
-        if (d2 < 12000) { var f = (12000 - d2) / 12000 * 2.2; p.vx += dx / Math.sqrt(d2 + 1) * f; p.vy += dy / Math.sqrt(d2 + 1) * f; }
-        p.vx += (tx - p.x) * 0.012; p.vy += (ty - p.y) * 0.012;
-        p.vx *= 0.9; p.vy *= 0.9; p.x += p.vx; p.y += p.vy;
-        c.beginPath(); c.arc(p.x, p.y, p.r, 0, 6.283);
-        c.fillStyle = p.star ? 'rgba(226,182,83,' + (0.55 + 0.45 * Math.sin(time * 1.5 + p.ph) * 0.5 + 0.2) + ')' : 'rgba(232,236,243,0.18)';
-        c.fill();
+      var w = cmz.w, h = cmz.h;
+      c.clearRect(0, 0, w, h);
+      c.globalCompositeOperation = 'lighter';
+      dust.forEach(function (p) {
+        p.y -= p.v * dt; if (p.y < -10) { p.y = h + 10; }
+        var a = fade(p.x, p.y) * (0.25 + 0.2 * Math.sin(time * 1.3 + p.ph));
+        if (a < 0.02) return;
+        c.globalAlpha = a; c.drawImage(p.gold ? GS : WS, p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
       });
+      var mx = mouse.x > -9000 ? (mouse.x / w - 0.5) : 0, my = mouse.y > -9000 ? (mouse.y / h - 0.5) : 0;
+      par.x += (mx - par.x) * Math.min(1, dt * 3); par.y += (my - par.y) * Math.min(1, dt * 3);
+      centers.forEach(function (ce) {
+        var br = 1 + 0.035 * Math.sin(time * 0.9 + ce.ph), rot = Math.sin(time * 0.3 + ce.ph) * 0.06;
+        var cx = ce.x + par.x * 18, cy = ce.y + par.y * 14, R = ce.s * br;
+        // halo
+        c.globalCompositeOperation = 'lighter';
+        c.globalAlpha = 0.5 + 0.12 * Math.sin(time * 1.1 + ce.ph);
+        var hs = R * 2.6; c.drawImage(GS, cx - hs / 2, cy - hs / 2, hs, hs);
+        // long thin flare across the star
+        c.globalAlpha = 0.22; c.drawImage(GS, cx - R * 2.2, cy - 1.5, R * 4.4, 3); c.drawImage(GS, cx - 1.5, cy - R * 2.2, 3, R * 4.4);
+        // body
+        c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+        starPath(cx, cy, R, rot);
+        var g = c.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+        g.addColorStop(0, '#fff1c8'); g.addColorStop(0.45, '#e2b653'); g.addColorStop(1, '#9c7a26');
+        c.fillStyle = g; c.fill();
+        // facet highlight: lighter upper-left half
+        c.save(); starPath(cx, cy, R, rot); c.clip();
+        c.beginPath(); c.moveTo(cx - R * 2, cy - R * 2); c.lineTo(cx + R * 2, cy - R * 2); c.lineTo(cx - R * 2, cy + R * 2); c.closePath();
+        c.fillStyle = 'rgba(255,250,230,0.22)'; c.fill(); c.restore();
+        ce.cx = cx; ce.cy = cy; ce.R = R; ce.rot = rot;
+      });
+      // sparks orbiting the outline
+      c.globalCompositeOperation = 'lighter';
+      pts.forEach(function (p) {
+        var ce = p.ce; p.t = (p.t + p.sp * dt * 6 + 1) % 1;
+        var q = starPt(p.t), cs = Math.cos(ce.rot), sn = Math.sin(ce.rot), o = p.off + 0.05 * Math.sin(time * 2 + p.ph);
+        var x = ce.cx + (q.x * cs - q.y * sn) * ce.R * o, y = ce.cy + (q.x * sn + q.y * cs) * ce.R * o;
+        var a = (0.45 + 0.55 * Math.sin(time * 2.2 + p.ph)) * fade(x, y);
+        if (a < 0.03) return;
+        c.globalAlpha = a; c.drawImage(GS, x - p.size / 2, y - p.size / 2, p.size, p.size);
+      });
+      c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     }
-    if (reduce) { pts.forEach(function (p) { p.x = p.hx; p.y = p.hy; }); frame(0); }
+    build();
+    if (reduce) frame(0);
     else loop(cv, frame);
-    window.addEventListener('resize', function () { cmz = fitCanvas(cv); c = cmz.ctx; build(); });
+    // copy finishes revealing after load; re-measure so the clear zone matches final layout
+    var rb = null;
+    var rebuild = function () { clearTimeout(rb); rb = setTimeout(function () { build(); if (reduce) frame(0); }, 120); };
+    window.addEventListener('resize', rebuild);
+    window.addEventListener('load', rebuild);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuild);
   });
 
   /* ---------- lifecycle track (life settlements) ---------- */
@@ -435,7 +547,7 @@
     var Y = function (v) { return T + (1 - v) * (H - T - B); };
     for (var gy = 0; gy <= 4; gy++) el('line', { x1: L, x2: W - Rr, y1: Y(gy / 4), y2: Y(gy / 4), stroke: 'rgba(11,31,58,0.07)' }, svg);
     for (var yy = 0; yy <= years; yy += 10) { var tx = el('text', { x: X(yy), y: H - 12, 'text-anchor': 'middle', class: 'axis-label' }, svg); tx.textContent = yy === 0 ? 'Policy start' : 'Yr ' + yy; }
-    var yl = el('text', { x: 4, y: Y(0.86), class: 'axis-label' }, svg); yl.textContent = 'Coverage';
+    var yl = el('text', { x: L, y: 12, class: 'axis-label', style: 'font-weight:600' }, svg); yl.textContent = 'Coverage';
     var defs = el('defs', {}, svg);
     var g1 = el('linearGradient', { id: 'gTerm', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
     el('stop', { offset: '0', 'stop-color': NAVY3, 'stop-opacity': 0.35 }, g1); el('stop', { offset: '1', 'stop-color': NAVY3, 'stop-opacity': 0.02 }, g1);
@@ -510,13 +622,13 @@
   if (iul) {
     var R5 = rng(19), yrsN = 16, rets = [];
     for (var a = 0; a < yrsN; a++) rets.push(Math.round(((R5() - 0.36) * 34)) / 1);
-    var W2 = 600, H2 = 190, mid = 100, sc = 4.2, bw = (W2 - 40) / yrsN;
+    var W2 = 600, H2 = 190, mid = 100, sc = 4.2, GL = 66, bw = (W2 - GL - 8) / yrsN;
     var s2 = el('svg', { viewBox: '0 0 ' + W2 + ' ' + H2, role: 'img', 'aria-label': 'Illustration: index returns compared with credited growth that is floored at zero' }, iul);
-    el('line', { x1: 20, x2: W2 - 20, y1: mid, y2: mid, stroke: 'rgba(11,31,58,0.25)' }, s2);
-    var fl = el('text', { x: W2 - 20, y: mid - 6, 'text-anchor': 'end', class: 'axis-label', style: 'font-weight:600;fill:' + NAVY }, s2); fl.textContent = 'Floor';
+    el('line', { x1: GL - 6, x2: W2 - 8, y1: mid, y2: mid, stroke: 'rgba(11,31,58,0.3)', 'stroke-dasharray': '3 4' }, s2);
+    var fl = el('text', { x: GL - 12, y: mid + 4, 'text-anchor': 'end', class: 'axis-label', style: 'font-weight:600;fill:' + NAVY }, s2); fl.textContent = '0% floor';
     var bars = [];
     rets.forEach(function (r, i) {
-      var x = 20 + i * bw + 3, w = bw - 6;
+      var x = GL + i * bw + 3, w = bw - 6;
       var idx = el('rect', { x: x, width: w / 2 - 1, y: r >= 0 ? mid - r * sc : mid, height: Math.abs(r) * sc, rx: 2, fill: r >= 0 ? 'rgba(29,58,102,0.35)' : 'rgba(214,92,74,0.55)' }, s2);
       var cr = Math.max(0, r);
       var cred = el('rect', { x: x + w / 2 + 1, width: w / 2 - 1, y: mid - cr * sc, height: Math.max(1.5, cr * sc), rx: 2, fill: GOLD }, s2);
